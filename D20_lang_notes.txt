@@ -1,0 +1,206 @@
+Dice rolling:
+
+    Basic dice roll - 1d20 rolls between 1 and 20.
+    Compound roll - 3d20 performs 3 rolls, each between 1 and 20
+
+    Compound dice rolls result in a list. This list will be maintained unless used
+    in an operation requiring an integer (such as the left and right operands of
+    the 'd' operator), in which case the values of the list will be summed together.
+    You can force the summation of a list by prefixing with a +: +3d20
+    You can form lists from independent dice rolls/expressions using []: [1d20, 2d5]
+
+    1d2d3 -> (1d2)d3
+
+
+Modifiers:
+    Sorting - 5d20s sorts in ascending order, 5d20sd sorts in descenting order
+    Keep rolls - 3d20kl2 keeps lowest 2 of the 3 rolls, 3d20kh2 keeps hightest
+    Compound keeps - 5d20kh2kl2 keeps the hightest 2 and lowest 2
+    Drop rolls - 3d20dl2 drop lowest 2
+    Compound drops - 5d20dl2dh2 drop the highest 2 and lowest 2
+    You cannot combine drops and keeps, unless using parentheses like so:
+        (5d20dl1dh1)kl1kh1
+    
+
+Memory:
+    Memory is considered to be a series of dice slots. These dice slots are
+    referenced as a dice roll prefaced by either & or @ depending on whether
+    you're storing or reading from memory.
+    
+    A memory address is specified as XdY. In this case, X is the number of
+    dice, and Y is the starting die slot. One die slot can only store 1 dice
+    roll, so @5d10 reads 5 dice starting at slot 10; slots 10, 11, 12,
+    13, and 14.
+
+    Storing to compound roll to a die slot will overwrite as many slots as it
+    takes to store all the rolls, or it will truncate the list if the address
+    specification has fewer slots than the there are rolls to store.
+
+    Examples...
+    Store 3d20 rolls starting in slot 10:
+        3d20 &3d10
+    Get the average of the 3 rolls and store it in slot 2:
+        +@3d10/10d3kh1&1d2
+    
+
+
+Prompt/print:
+    Get user input (always string) - ?&10d1
+    print a string from memory     - !@10d1
+
+File IO:
+    Open a file - ^@10d1&10d20 opens a file in read mode
+                  v@10d1&10d20 opens a file in write mode
+                  The first parameter is the name, second parameter is where to put the FP
+    Read from file - ?|@10d20&10d10
+    Write to file - !|@10d20@10d10
+    Close file - |@10d20
+
+
+Expressions: 
+An expression constitutes one or more dice rolls combined with operations
+and constants. You can perform basic arithmetic with constants and dice rolls
+like 1d20+2 or 5d20*2+1d5. You can use parentheses to group this arithmetic. 
+Think of d as another operation - it's priority is between parentheses and
+multiplication. So you can do (1d5+2)d(1d20*2)
+
+
+Hello world 2 ways:
+    ![1000d72kh1 1000d101kh1 1000d108kh1 1000d108kh1 1000d111kh1
+      1000d32kh1 1000d87kh1 1000d111kh1 1000d114kh1 1000d108kh1
+      1000d100kh1 1000d33kh1]
+    
+    !1d0+72 !1d0+101 !2d0+108 !1d0+111 !1d0+32 !1d0+87 !1d0+111
+    !1d0+114 !1d0+108 !1d0+100 !1d0+33
+
+
+Conditions - Possibly {condition,expression | [condition,]expression}
+Example:
+    1d20 &
+    {@1d1>=10, !1d0+80 !1d0+97 !2d0+115 | !1d0+70 !1d0+97 !1d0+105 !1d0108}
+This will roll a D20 and save the result in value.
+It will print "Pass" if value >= 10, otherwise, it prints "Fail"
+
+Rerolls - 5d20r<10 or 5d100r!=65
+Possibly a solution for looping? Don't know how it would be expressed
+
+Macros
+
+Exponents
+
+Check for success/fails - 5d20>10 -> a list of pass/fails if a d20 is over 10
+
+No constants allowed:
+    You want a constant? Use statistics. For example, 'H' is ASCII 71 in decimal.
+    You can do:
+        (+144d2>1+@1d2&1d2)r(+10d10&1d1)
+        !@1d2/@1d1
+
+If you roll all nat 1s, the program crashes
+
+Grammar rules:
+    starting rule: exprlist
+
+    exprlist    =>  <expr>
+                |   <expr> <exprlist>
+
+    expr        =>  <openexpr>
+                |   <printexpr>
+                |   <promptexpr>
+                |   <closeexpr>
+                |   <storeexpr>
+                |   <ifexpr>
+                |   <basicexpr>
+
+    openexpr    =>  '^' <expr> <storeref>
+                |   'v' <expr> <storeref>
+
+    printexpr   =>  '!' <expr>
+                |   '!|' <readref> <expr>
+
+    promptexpr  =>  '?' <storeref>
+                |   '?|' <readref> <storeref>
+
+    closeexpr   =>  '|' <readref>
+
+    storeexpr   =>  <expr> <storeref>
+
+    ifexpr      =>  '{' <condlist> '}'
+                |   '{' <condlist> '|' <expr> '}'
+
+    condlist    =>  <cond>
+                |   <cond> '|' <condlist>
+
+    cond        =>  <expr> ',' <expr>
+
+    diceexpr    =>  <operator> <basicexpr> <modifier>
+                |   <operator> <basicexpr>
+                |   <basicexpr> <modifier>
+                |   <basicexpr>
+
+    basicexpr   =>  <prefixop> <mathop>
+                |   <mathop>
+
+    prefixop    =>  '+' | '~'
+
+    mathop      =>  <addsub>
+                |   <addsub> && <mathop>
+                |   <addsub> || <mathop>
+
+    addsub      =>  <muldiv>
+                |   <muldiv> + <addsub>
+                |   <muldiv> - <addsub>
+
+    muldiv      =>  <invert>
+                |   <invert> * <muldiv>
+                |   <invert> / <muldiv>
+                |   <invert> % <muldiv>
+
+    invert      =>  <modifiable>
+                |   ~ <modifiable>
+
+    modifiable  =>  <value>
+                |   [ <exprlist> ]
+                |   <modifiable> <modifiers>
+
+    value       =>  <paren>
+                |   <diceroll>
+                |   <readref>
+
+    paren       =>  <decimal>
+                |   '(' <expr> ')'
+
+    storeref    =>  '&' <diceroll>
+
+    readref     =>  '@' <diceroll>
+
+    diceroll    =>  <paren> 'd' <paren>
+
+    decimal     =>  \d+
+
+    modifiers   =>  <modifier>
+                |   <modifier> <modifiers>
+
+    modifier    =>  <repeat>
+                |   <keep>
+                |   <sort>
+                |   <critcheck>
+
+    repeat      =>  'r'  <paren>
+                |   'r'  <critcheck>
+                |   'ro' <critcheck>
+
+    keep        =>  'kl' <paren>
+                |   'kh' <paren>
+
+    sort        =>  's'
+                |   'sd'
+
+    critcheck   =>  '>' <paren>
+                    '<' <paren>
+                    '=' <paren>
+
+
+
+
+    
