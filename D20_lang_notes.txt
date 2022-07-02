@@ -54,7 +54,7 @@ File IO:
                   The first parameter is the name, second parameter is where to put the FP
     Read from file - ?|@10d20&10d10
     Write to file - !|@10d20@10d10
-    Close file - |@10d20
+    Close file - #@10d20
 
 
 Expressions: 
@@ -104,26 +104,26 @@ Grammar rules:
     exprlist    =>  <expr>
                 |   <expr> <exprlist>
 
-    expr        =>  <openexpr>
-                |   <printexpr>
-                |   <promptexpr>
+    expr        =>  <printexpr>
                 |   <closeexpr>
-                |   <storeexpr>
                 |   <ifexpr>
-                |   <basicexpr>
+                |   <storeble>
 
-    openexpr    =>  '^' <expr> <storeref>
-                |   'v' <expr> <storeref>
+    storeable   =>  <mathexpr>
+                |   <openexpr>
+                |   <promptexpr>
+                |   <storable> <storeref>
+
+    openexpr    =>  '^' <expr>
+                |   'v' <expr>
 
     printexpr   =>  '!' <expr>
                 |   '!|' <readref> <expr>
 
-    promptexpr  =>  '?' <storeref>
-                |   '?|' <readref> <storeref>
+    promptexpr  =>  '?'
+                |   '?|' <readref>
 
     closeexpr   =>  '|' <readref>
-
-    storeexpr   =>  <expr> <storeref>
 
     ifexpr      =>  '{' <condlist> '}'
                 |   '{' <condlist> '|' <expr> '}'
@@ -133,31 +133,22 @@ Grammar rules:
 
     cond        =>  <expr> ',' <expr>
 
-    diceexpr    =>  <operator> <basicexpr> <modifier>
-                |   <operator> <basicexpr>
-                |   <basicexpr> <modifier>
-                |   <basicexpr>
-
-    basicexpr   =>  <prefixop> <mathop>
-                |   <mathop>
-
-    prefixop    =>  '+' | '~'
-
-    mathop      =>  <addsub>
-                |   <addsub> && <mathop>
-                |   <addsub> || <mathop>
+    mathexpr    =>  <addsub>
+                |   <addsub> && <mathexpr>
+                |   <addsub> || <mathexpr>
 
     addsub      =>  <muldiv>
                 |   <muldiv> + <addsub>
                 |   <muldiv> - <addsub>
 
-    muldiv      =>  <invert>
-                |   <invert> * <muldiv>
-                |   <invert> / <muldiv>
-                |   <invert> % <muldiv>
+    muldiv      =>  <prefix>
+                |   <prefix> * <muldiv>
+                |   <prefix> / <muldiv>
+                |   <prefix> % <muldiv>
 
-    invert      =>  <modifiable>
+    prefix      =>  <modifiable>
                 |   ~ <modifiable>
+                |   + <modifiable>
 
     modifiable  =>  <value>
                 |   [ <exprlist> ]
