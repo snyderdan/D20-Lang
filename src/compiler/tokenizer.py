@@ -69,7 +69,8 @@ class ReTokenFactory(TokenFactory):
         return self.pattern.match(inp)
 
 
-tokens = [SingleTokenFactory('file_open_r', '^'),
+tokens = [ReTokenFactory('comment',r'//.*'),
+          SingleTokenFactory('file_open_r', '^'),
           SingleTokenFactory('file_open_w', 'v'),
           SingleTokenFactory('file_read', '?|'),
           SingleTokenFactory('file_write', '!|'),
@@ -106,8 +107,7 @@ tokens = [SingleTokenFactory('file_open_r', '^'),
           SingleTokenFactory('sort_descend', 'sd'),
           SingleTokenFactory('sort', 's'),
           SingleTokenFactory('roll', 'd'),
-          ReTokenFactory('number',r'\d+'),
-          ReTokenFactory('comment',r'//.*')]
+          ReTokenFactory('number',r'\d+')]
 
 tokendict = dict(((tok.name, tok.ID) for tok in tokens))
 

@@ -1,0 +1,9 @@
+// prompt "What is your name?"
+![1d0+87 1d0+104 1d0+97 1d0+116 1d0+32 1d0+105 1d0+115 1d0+32 1d0+121 
+1d0+111 1d0+117 1d0+114 1d0+32 1d0+110 1d0+97 1d0+109 1d0+101 1d0+63]
+// get name - maximum of 20 characters
+?&21d20
+// print "Hello "
+![1d0+72 1d0+101 1d0+108 1d0+108 1d0+111 1d0+32]
+// print their name
+!@(@1d20)d20

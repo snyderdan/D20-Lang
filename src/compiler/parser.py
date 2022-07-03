@@ -259,7 +259,7 @@ class prefix:
             self.op = pop(tokens).label
         else:
             self.op = None
-        self.value = modifiable(tokens)
+        self.value = value(tokens)
 
     def gen(self, pgm):
         self.value.gen(pgm)
@@ -267,26 +267,6 @@ class prefix:
             pgm.append('INV')
         elif self.op == 'add':
             pgm.append('SUM')
-
-class modifiable:
-    def __init__(self, tokens):
-        if peek(tokens).label == 'o_square':
-            pop(tokens)
-            self.type = 'list'
-            self.value = exprlist(tokens, terminators=['c_square'])
-            if peek(tokens).label != 'c_square':
-                raise CompileException(peek(tokens), 'Expected closing square bracket')
-        else:
-            self.type = 'value'
-            self.value = value(tokens)
-
-        self.modifiers = modifiers(tokens)
-
-    def gen(self, pgm):
-        self.value.gen(pgm)
-        if self.type == 'list':
-            pgm.append('MLIST {}'.format(len(self.value.expression)))
-        self.modifiers.gen(pgm)
 
 class modifiers:
     def __init__(self, tokens):
@@ -306,7 +286,6 @@ class modifiers:
         token = peek(tokens, False)
         while token and token.label in keys:
             mod = pop(tokens).label
-            print(mod)
             if mod == 'keep_high':
                 if self.kh:
                     raise CompileException(token, 'Only 1 "kh" allowed per expression')
@@ -354,14 +333,21 @@ class modifiers:
                 # critcheck
                 if self.critcheck:
                     raise CompileException(token, 'Only 1 crit check allowed per expression')
-                self.critcheck = critcheck(tokens)
+                self.critcheck = critcheck(tokens, token=token)
             token = peek(tokens, False)
 
-    def gen(self, pgm):
-        pass
+    def gen(self, pgm, repeatLabel):
+        '''
+        Order of operations:
+            repeat
+            keep/discard
+            sort
+            critcheck
+        '''
 
 class critcheck:
-    def __init__(self, token, tokens):
+    def __init__(self, tokens, token=None):
+        if not token: token = pop(tokens)
         self.op = token.label
         if self.op not in ['greater_than', 'less_than', 'equals']:
             raise CompileException(token, 'Expected crit check, got "{}"'.format(token.value))
@@ -373,14 +359,33 @@ class value:
     def __init__(self, tokens):
         if peek(tokens).label == 'load':
             self.value = readref(tokens)
+        elif peek(tokens).label == 'o_square':
+            self.value = listgen(tokens)
         else:
             self.value = paren(tokens)
             tok = peek(tokens, False)
             if tok and tok.label == 'roll':
                 self.value = diceroll(tokens, count=self.value)
 
+        self.modifiers = modifiers(tokens)
+
+    def gen(self, pgm):
+        repeatLabel = genLabel()
+        self.value.gen(pgm)
+        self.modifiers.gen(pgm, repeatLabel)
+
+class listgen:
+    def __init__(self, tokens):
+        if peek(tokens).label != 'o_square':
+            raise CompileException(peek(tokens), 'Expected list generator')
+        pop(tokens)
+        self.value = exprlist(tokens, terminators=['c_square'])
+        if pop(tokens).label != 'c_square':
+            raise CompileException(peek(tokens), 'Expected closing square bracket')
+
     def gen(self, pgm):
         self.value.gen(pgm)
+        pgm.append('MLIST {}'.format(len(self.value.expressions)))
 
 class storeref:
     def __init__(self, tokens):

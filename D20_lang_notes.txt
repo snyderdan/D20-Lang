@@ -123,7 +123,7 @@ Grammar rules:
     promptexpr  =>  '?'
                 |   '?|' <readref>
 
-    closeexpr   =>  '|' <readref>
+    closeexpr   =>  '#' <readref>
 
     ifexpr      =>  '{' <condlist> '}'
                 |   '{' <condlist> '|' <expr> '}'
@@ -146,17 +146,17 @@ Grammar rules:
                 |   <prefix> / <muldiv>
                 |   <prefix> % <muldiv>
 
-    prefix      =>  <modifiable>
-                |   ~ <modifiable>
-                |   + <modifiable>
-
-    modifiable  =>  <value>
-                |   [ <exprlist> ]
-                |   <modifiable> <modifiers>
+    prefix      =>  <value>
+                |   ~ <value>
+                |   + <value>
 
     value       =>  <paren>
                 |   <diceroll>
                 |   <readref>
+                |   <listgen>
+                |   <value> <modifiers>
+
+    listgen     =>  '[' <exprlist> ']'
 
     paren       =>  <decimal>
                 |   '(' <expr> ')'
@@ -169,7 +169,8 @@ Grammar rules:
 
     decimal     =>  \d+
 
-    modifiers   =>  <modifier>
+    modifiers   =>  E
+                |   <modifier>
                 |   <modifier> <modifiers>
 
     modifier    =>  <repeat>
