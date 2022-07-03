@@ -392,7 +392,7 @@ class storeref:
     def gen(self, pgm):
         self.ref.genSides(pgm)
         self.ref.genCount(pgm)
-        pgm.append('STORE')
+        pgm.append('POPV')
 
 class readref:
     def __init__(self, tokens):
@@ -404,7 +404,7 @@ class readref:
     def gen(self, pgm):
         self.ref.genSides(pgm)
         self.ref.genCount(pgm)
-        pgm.append('LOAD')
+        pgm.append('PUSHV')
 
 class diceroll:
     def __init__(self, tokens, count=None):
@@ -449,6 +449,6 @@ class paren:
 
     def gen(self, pgm):
         if self.type == 'numeric':
-            pgm.append('LOAD {}'.format(self.inner))
+            pgm.append('PUSH {}'.format(self.inner))
         else:
             self.inner.gen(pgm)
