@@ -98,6 +98,14 @@ No constants allowed:
 
 If you roll all nat 1s, the program crashes
 
+Notes on modifiers:
+    Our modifiers are repeat count, crit repeat, keep, discard, sort, critcheck
+    Are all of these modifiers applicable to all expressions?
+    Off the bat, I don't think so. For instance, repeat based on
+    a crit check shouldn't be applicable to an {if}. A crit repeat in particular
+    is intended to re-roll all dice matching the criteria. With an {if} we don't
+    know how to re-roll those values. 
+
 Grammar rules:
     starting rule: exprlist
 
@@ -184,6 +192,8 @@ Grammar rules:
 
     keep        =>  'kl' <paren>
                 |   'kh' <paren>
+                |   'kf' <paren>
+                |   'kr' <paren>
 
     sort        =>  's'
                 |   'sd'

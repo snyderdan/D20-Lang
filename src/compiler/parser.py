@@ -1,7 +1,9 @@
 import tokenizer
 
 class CompileException(Exception):
-    def __init__(self, token, message):
+    def __init__(self, token, message, got=None):
+        if got:
+            message += ', got "{}" instead'.format(got.value)
         msg = "Error line {} column {}: {}".format(token.line, token.column, message)
         super().__init__(msg)
 
@@ -40,10 +42,18 @@ class exprlist:
             self.expressions.append(expr(tokens))
 
     def gen(self, pgm):
+        labels = []
         for expr in self.expressions:
+            label = genLabel()
+            pgm.append(label)
+            labels.append(label)
             expr.gen(pgm)
             if self.toplevel:
                 pgm.append('POP')
+        endLabel = genLabel()
+        pgm.append(endLabel)
+        labels.append(endLabel)
+        return labels
 
 diceEncountered = False
 
@@ -90,7 +100,7 @@ class ifexpr:
                 break
             else:
                 # error
-                raise CompileException(tok, 'Unexpected symbol in condition block "{}"'.format(tok.value))
+                raise CompileException(tok, 'Expected a comma or closing bracket', tok)
             # handle separator
             tok = pop(tokens)
             if tok.label == 'v_bar':
@@ -101,17 +111,17 @@ class ifexpr:
                 break
             else:
                 # error
-                raise CompileException(tok, 'Unexpected symbol in condition block "{}"'.format(tok.value))
+                raise CompileException(tok, 'Expected a vertical bar or closing bracket', tok)
     
     def gen(self, pgm):
         endLabel = genLabel()
         for condition, expression in self.conditions:
             condition.gen(pgm)
             jumpLabel = genLabel()
-            pgm.append('GOTONIF ' + jumpLabel)
+            pgm.append('JMPZ ' + jumpLabel)
             pgm.append('POP')
             expression.gen(pgm)
-            pgm.append('GOTO ' + endLabel)
+            pgm.append('JMP ' + endLabel)
             pgm.append(jumpLabel)
             pgm.append('POP')
         if self.elseclause:
@@ -165,7 +175,7 @@ class closeexpr:
     def __init__(self, tokens):
         tok = pop(tokens)
         if tok.label != 'file_close':
-            raise CompileException(tok, 'Close expression expected.')
+            raise CompileException(tok, 'Close expression expected', tok)
         self.file = readref(tokens)
 
     def gen(self, pgm):
@@ -176,7 +186,7 @@ class printexpr:
     def __init__(self, tokens):
         tok = pop(tokens)
         if tok.label not in ['print', 'file_write']:
-            raise CompileException(tok, 'Expected print or file write.')
+            raise CompileException(tok, 'Expected print or file write', tok)
         
         if tok.label == 'file_write':
             self.file = readref(tokens)
@@ -268,49 +278,50 @@ class prefix:
         elif self.op == 'add':
             pgm.append('SUM')
 
+class value:
+    def __init__(self, tokens):
+        if peek(tokens).label == 'load':
+            self.type = 'load'
+            self.value = readref(tokens)
+        elif peek(tokens).label == 'o_square':
+            self.type = 'list'
+            self.value = listgen(tokens)
+        else:
+            self.value = paren(tokens)
+            tok = peek(tokens, False)
+            self.type = 'basic'
+            if tok and tok.label == 'roll':
+                self.type = 'roll'
+                self.value = diceroll(tokens, count=self.value)
+
+        # perhaps we make sure we only do modifiers on dice rolls and list generators
+        # then pass a list to the gen() function of list generators to add labels to
+        # each label corresponds to each value of the list generator. We then jump
+        # to the corresponding label after testing it against the repeater
+        # provided its a r<critcheck> or ro<critcheck>
+        self.modifiers = modifiers(tokens)
+
+    def gen(self, pgm):
+        repeatLabel = genLabel()
+        self.value.gen(pgm)
+        self.modifiers.gen(pgm, repeatLabel)
+
 class modifiers:
     def __init__(self, tokens):
-        # I am so sorry for what you're about to witness.
         keys = ['repeat_once', 'repeat', 'keep_high', 'keep_low', 
                 'discard_high', 'discard_low', 'sort', 'sort_descend',
-                'greater_than', 'less_than', 'equals']
-        self.kh = None
-        self.kl = None
-        self.dh = None
-        self.dl = None
+                'greater_than', 'less_than', 'equals', 'keep_front',
+                'keep_rear', 'discard_front', 'discard_rear']
         self.sort = False
         self.sortd = False
         self.ro = None
         self.r = None
         self.critcheck = None
+        self.keepdiscard = []
         token = peek(tokens, False)
         while token and token.label in keys:
             mod = pop(tokens).label
-            if mod == 'keep_high':
-                if self.kh:
-                    raise CompileException(token, 'Only 1 "kh" allowed per expression')
-                if self.dh or self.dl:
-                    raise CompileException(token, 'Cannot have keeps mixed with discards')
-                self.kh = paren(tokens)
-            elif mod == 'keep_low':
-                if self.kl:
-                    raise CompileException(token, 'Only 1 "kl" allowed per expression')
-                if self.dh or self.dl:
-                    raise CompileException(token, 'Cannot have keeps mixed with discards')
-                self.kl = paren(tokens)
-            elif mod == 'discard_high':
-                if self.dh:
-                    raise CompileException(token, 'Only 1 "dh" allowed per expression')
-                if self.kl or self.kh:
-                    raise CompileException(token, 'Cannot have keeps mixed with discards')
-                self.dh = paren(tokens)
-            elif mod == 'discard_low':
-                if self.dl:
-                    raise CompileException(token, 'Only 1 "dl" allowed per expression')
-                if self.kl or self.kh:
-                    raise CompileException(token, 'Cannot have keeps mixed with discards')
-                self.dl = paren(tokens)
-            elif mod == 'sort':
+            if mod == 'sort':
                 if self.sort or self.sortd:
                     raise CompileException(token, 'Only 1 sort allowed per expression')
                 self.sort = True
@@ -329,59 +340,76 @@ class modifiers:
                 if self.r or self.ro:
                     raise CompileException(token, 'Only 1 repeat allowed per expression')
                 self.ro = critcheck(tokens)
-            else:
+            elif mod in ['less_than', 'greater_than', 'equals']:
                 # critcheck
                 if self.critcheck:
                     raise CompileException(token, 'Only 1 crit check allowed per expression')
                 self.critcheck = critcheck(tokens, token=token)
+            else:
+                self.keepdiscard.append(keepdiscard(tokens))
             token = peek(tokens, False)
 
     def gen(self, pgm, repeatLabel):
         '''
         Order of operations:
-            repeat
-            keep/discard
             sort
+            keep/discard
+            repeat
             critcheck
         '''
+        if self.sort:
+            pgm.append('SORTA')
+        elif self.sortd:
+            pgm.append('SORTD')
+
+        for kd in self.keepdiscard:
+            kd.gen(pgm)
+        
+        if self.r:
+            pass
+        if self.ro:
+            pass
+        
+        if self.critcheck:
+            self.critcheck.gen(pgm)
+
+class keepdiscard:
+    def __init__(self, tokens):
+        tok = pop(tokens)
+        if tok.value not in ('kh', 'kl', 'kf', 'kr', 'dh', 'dl', 'df', 'dr'):
+            raise CompileException(tok, 'Expected a keep/discard modifier', tok)
+        self.op = tok.value.upper()
+        self.quantity = paren(tokens)
+
+    def gen(self, pgm):
+        self.quantity.gen(pgm)
+        pgm.append(self.op)
 
 class critcheck:
     def __init__(self, tokens, token=None):
         if not token: token = pop(tokens)
         self.op = token.label
         if self.op not in ['greater_than', 'less_than', 'equals']:
-            raise CompileException(token, 'Expected crit check, got "{}"'.format(token.value))
+            raise CompileException(token, 'Expected crit check', token)
         self.value = paren(tokens)
-    def gen(self, pgm):
-        pass
-
-class value:
-    def __init__(self, tokens):
-        if peek(tokens).label == 'load':
-            self.value = readref(tokens)
-        elif peek(tokens).label == 'o_square':
-            self.value = listgen(tokens)
-        else:
-            self.value = paren(tokens)
-            tok = peek(tokens, False)
-            if tok and tok.label == 'roll':
-                self.value = diceroll(tokens, count=self.value)
-
-        self.modifiers = modifiers(tokens)
 
     def gen(self, pgm):
-        repeatLabel = genLabel()
         self.value.gen(pgm)
-        self.modifiers.gen(pgm, repeatLabel)
+        if self.op == 'greater_than':
+            pgm.append('CCGT')
+        elif self.op == 'less_than':
+            pgm.append('CCLT')
+        else:
+            pgm.append('CCEQ')
 
 class listgen:
     def __init__(self, tokens):
         if peek(tokens).label != 'o_square':
-            raise CompileException(peek(tokens), 'Expected list generator')
+            raise CompileException(peek(tokens), 'Expected list generator', peek(tokens))
         pop(tokens)
         self.value = exprlist(tokens, terminators=['c_square'])
         if pop(tokens).label != 'c_square':
-            raise CompileException(peek(tokens), 'Expected closing square bracket')
+            raise CompileException(peek(tokens), 'Expected closing square bracket', peek(tokens))
 
     def gen(self, pgm):
         self.value.gen(pgm)
@@ -391,7 +419,7 @@ class storeref:
     def __init__(self, tokens):
         tok = pop(tokens)
         if tok.label != 'store':
-            raise CompileException(tok, 'Expected write storage reference')
+            raise CompileException(tok, 'Expected write storage reference', tok)
         self.ref = diceroll(tokens)
 
     def gen(self, pgm):
@@ -403,7 +431,7 @@ class readref:
     def __init__(self, tokens):
         tok = pop(tokens)
         if tok.label != 'load':
-            raise CompileException(tok, 'Expected read storage reference')
+            raise CompileException(tok, 'Expected read storage reference', tok)
         self.ref = diceroll(tokens)
 
     def gen(self, pgm):
@@ -420,7 +448,7 @@ class diceroll:
             
         tok = pop(tokens)
         if tok.label != 'roll':
-            raise CompileException(tok, 'Expected dice roll')
+            raise CompileException(tok, 'Expected dice roll', tok)
         self.sides = paren(tokens)
 
     def genSides(self, pgm):
@@ -445,12 +473,12 @@ class paren:
             return 
 
         if tok.label != 'o_paren':
-            raise CompileException(tok, "Expected a number or open parenthesis")
+            raise CompileException(tok, "Expected a number or open parenthesis", tok)
         self.type = 'expression'
         self.inner = expr(tokens)
         tok = pop(tokens)
         if tok.label != 'c_paren':
-            raise CompileException(tok, "Expected a closing parenthesis")
+            raise CompileException(tok, "Expected a closing parenthesis", tok)
 
     def gen(self, pgm):
         if self.type == 'numeric':

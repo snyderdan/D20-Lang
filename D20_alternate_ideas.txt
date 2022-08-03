@@ -1,0 +1,45 @@
+
+The entire language is exclusively dice roll notation. A program is broken down into a series
+of expressions. The type of expression is determined by the first dice roll in the expression.
+
+Expression identifier:
+    XdY - X is the number of dice rolls that are part of this expression, excluding this dice roll,
+          Y is the type of expression, which is one of the standard dice sizes.
+
+    Values for statement types:
+        d4   - Arithmetic expression 
+        d6   - Comparison expression
+        d8   - Read expression (IO/memory)
+        d10  - Write expression (IO/memory)
+        d12  - Conditional loop expression (while statement)
+        d20  - Open/close expression
+        d100 - List modification expression? Like kl/kh/slice?
+
+Each one will have it's own interpretation of the following dice rolls. 
+For instance, an arithmetic expression will look like:
+<value> <operation> <value> [ <operation> <value> ... ]
+
+Sample expressions:
+    3d4 2d80 3d17 5d9 - does some kind of math
+
+        2d80 is the first value
+        3d17 is the operation
+        5d9 is the second value
+
+    2d10 10d20 10d30 - store 10d30 in memory
+
+        10d20 is referencing 10 dice starting at address 20
+        10d30 is rolling 10 30-sided dice
+
+Values could also be other expressions such as comparisons or read operations. 
+
+Things that need to be figured out:
+    1) How do we determine what arithmetic operations are performed based on dice? 
+        There's only so many operations we have, but there are an infinite number of possible dice rolls.
+    
+    2) If we have a nested arithmetic structure:
+        6d4 3d4 1d2 3d4 5d6 7d8 9d10
+
+        How do we know the 3d4 is meant to be a nested statement and not an actual value?
+        Or if it were a d8, how do we know if it's a read or an actual d8? 
+        We could lisp it up and require expressions to be in parens: (6d4 (3d4 1d2 3d4 5d6) 7d8 9d10)
